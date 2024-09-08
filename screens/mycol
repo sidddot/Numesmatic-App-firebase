@@ -1,0 +1,61 @@
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Alert, Pressable, Image } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ImgContainer from '../component/ImgContainer';
+import Search from '../component/Search';
+
+
+const MyCollection = () => {
+
+  function ShowMyCollection({ coinList }) {
+    return coinList.map((coin) => <Text key={coin.id}>{coin.name}</Text>);
+  }
+
+  return (
+    <GestureHandlerRootView>
+    <ScrollView style={styles.container}>
+        <Text style={styles.text1}>My Collection </Text>
+        
+        
+        <View  style={styles.contimg}>
+        <Search/>
+        <ImgContainer/>
+          {/* <View style={styles.item}><ImgContainer  /></View>
+          <View style={styles.item}><ImgContainer  /></View>
+          <View style={styles.item}><ShowMyCollection coinList={coinList}/></View> */}
+        
+        
+        </View>
+    </ScrollView>
+    </GestureHandlerRootView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+  },
+  contimg:{
+    flex: 1,
+    backgroundColor: "#ebe294",
+    // flexDirection: 'row',
+    // flexWrap: 'wrap',
+    
+    // alignItems:'center',
+  },
+  text1:{
+    fontSize:30,
+    fontWeight: '500',
+    color:"black",
+    textAlign:"center",
+    padding:10,
+  },
+  item: {
+    width: '50%',
+    paddingHorizontal:20,
+    paddingTop:25,
+  }
+  
+});
+
+export default MyCollection ;
