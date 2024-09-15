@@ -6,6 +6,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { ref, onValue, set, remove, push } from 'firebase/database'; 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'; 
 import { db, storage } from '../firebase'; // Ensure this path is correct
+import { auth } from '../firebase'; // Import Firebase auth
 
 const AddImg = () => {
   const [textInputValue, setTextInputValue] = useState('');
@@ -17,26 +18,30 @@ const AddImg = () => {
   const [condition, setCondition] = useState('Common');
   const [coins, setCoins] = useState([]);
   const [coinType, setCoinType] = useState('');
-
+  const [userUID, setUserUID] = useState(null); // Store user UID
 
   useEffect(() => {
-    requestPermissions();
-    const coinsRef = ref(db, 'coins');
+    // Get the logged-in user's UID
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setUserUID(currentUser.uid);
+      const coinsRef = ref(db, `users/${currentUser.uid}/coins`); // Path to store user-specific coins
 
-    const unsubscribe = onValue(coinsRef, (snapshot) => {
-      const coinsData = [];
-      snapshot.forEach((childSnapshot) => {
-        coinsData.push({
-          uid: childSnapshot.key,
-          ...childSnapshot.val(),
+      const unsubscribe = onValue(coinsRef, (snapshot) => {
+        const coinsData = [];
+        snapshot.forEach((childSnapshot) => {
+          coinsData.push({
+            uid: childSnapshot.key,
+            ...childSnapshot.val(),
+          });
         });
+        setCoins(coinsData);
+      }, (error) => {
+        console.error('Error listening to data:', error);
       });
-      setCoins(coinsData);
-    }, (error) => {
-      console.error('Error listening to data:', error);
-    });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    }
   }, []);
 
   const requestPermissions = async () => {
@@ -102,7 +107,7 @@ const AddImg = () => {
   };
 
   const saveCoinToDatabase = async () => {
-    if (!textInputValue || !country || !imageFront || !imageBack || !material || !year) {
+    if (!textInputValue || !country || !imageFront || !imageBack || !material || !year || !userUID) {
       Alert.alert('Missing Fields', 'Please fill all fields and select both images.');
       return;
     }
@@ -131,7 +136,7 @@ const AddImg = () => {
         imageBack: imageBackUrl,
       };
 
-      const newCoinRef = push(ref(db, 'coins'));
+      const newCoinRef = push(ref(db, `users/${userUID}/coins`)); // User-specific coin path
       await set(newCoinRef, newCoin);
       setCoins([...coins, { ...newCoin, uid: newCoinRef.key }]);
       setTextInputValue('');
@@ -150,7 +155,7 @@ const AddImg = () => {
 
   const deleteCoin = async (coinToDelete) => {
     try {
-      await remove(ref(db, `coins/${coinToDelete.uid}`));
+      await remove(ref(db, `users/${userUID}/coins/${coinToDelete.uid}`)); // User-specific coin path
       setCoins(coins.filter((coin) => coin.uid !== coinToDelete.uid));
     } catch (error) {
       console.log('Error deleting coin:', error);
@@ -219,35 +224,38 @@ const AddImg = () => {
         style={styles.textInputStyle}
       />
 
-<View style={styles.radioContainer}>
-  <Text>Coin Type:</Text>
-  <View style={styles.radioButtonContainer}>
-    <TouchableOpacity onPress={() => setCoinType('Rare')}>
-      <Text style={[styles.radioButton, coinType === 'Rare' && styles.selectedRadio]}>Rare</Text>
-    </TouchableOpacity>
-    <TouchableOpacity onPress={() => setCoinType('Special')}>
-      <Text style={[styles.radioButton, coinType === 'Special' && styles.selectedRadio]}>Special</Text>
-    </TouchableOpacity>
-    <TouchableOpacity onPress={() => setCoinType('Common')}>
-      <Text style={[styles.radioButton, coinType === 'Common' && styles.selectedRadio]}>Common</Text>
-    </TouchableOpacity>
-  </View>
-</View>
-
+      <View style={styles.radioContainer}>
+        <Text>Coin Type:</Text>
+        <View style={styles.radioButtonContainer}>
+          <TouchableOpacity onPress={() => setCoinType('Rare')}>
+            <Text style={[styles.radioButton, coinType === 'Rare' && styles.selectedRadio]}>Rare</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCoinType('Special')}>
+            <Text style={[styles.radioButton, coinType === 'Special' && styles.selectedRadio]}>Special</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCoinType('Common')}>
+            <Text style={[styles.radioButton, coinType === 'Common' && styles.selectedRadio]}>Common</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <TouchableOpacity onPress={saveCoinToDatabase} style={styles.buttonStyle}>
         <Text style={styles.buttonTextStyle}>Save Coin</Text>
       </TouchableOpacity>
 
-      {coins.map((coin) => (
-        <View key={coin.uid} style={styles.coinContainer}>
-          <Text>{coin.name}</Text>
-          <Text>{coin.country}</Text>
-          <Image source={{ uri: coin.imageFront }} style={styles.imagePreview} />
-          <Image source={{ uri: coin.imageBack }} style={styles.imagePreview} />
-          <IconButton icon="delete" onPress={() => deleteCoin(coin)} />
-        </View>
-      ))}
+      <View>
+        {coins.map((coin, index) => (
+          <View key={coin.uid} style={styles.coinContainer}>
+            <Text>{coin.name}</Text>
+            <Text>{coin.country}</Text>
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: coin.imageFront }} style={styles.imagePreview} />
+              <Image source={{ uri: coin.imageBack }} style={styles.imagePreview} />
+            </View>
+            <IconButton icon="delete" size={20} onPress={() => deleteCoin(coin)} />
+          </View>
+        ))}
+      </View>
     </ScrollView>
   );
 };
@@ -258,89 +266,70 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   titleText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 20,
   },
-  imagePickerContainer: {
+  textInputStyle: {
+    height: 40,
+    borderColor: 'gray',
     borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 10,
     marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-  },
-  imagePickerPreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    paddingLeft: 8,
   },
   buttonStyle: {
     backgroundColor: '#007BFF',
     padding: 10,
     borderRadius: 5,
-    marginBottom: 10,
+    marginTop: 10,
+    alignItems: 'center',
   },
   buttonTextStyle: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 16,
   },
-  textInputStyle: {
-    height: 40,
-    borderColor: '#ccc',
+  imagePickerContainer: {
+    height: 200,
+    width: 200,
+    borderColor: 'gray',
     borderWidth: 1,
     marginBottom: 10,
-    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  radioGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  radioText: {
-    fontSize: 16,
+  imagePickerPreview: {
+    width: '100%',
+    height: '100%',
   },
   coinContainer: {
     marginBottom: 20,
   },
+  imagePreviewContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   imagePreview: {
     width: 100,
     height: 100,
-    resizeMode: 'cover',
-    marginBottom: 10,
   },
   radioContainer: {
-    marginVertical: 10,
+    marginBottom: 20,
   },
   radioButtonContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    marginTop: 10,
   },
   radioButton: {
-    fontSize: 16,
-    padding: 10,
-    margin: 5,
     borderWidth: 1,
-    borderColor: 'green',
+    borderColor: 'gray',
+    padding: 5,
     borderRadius: 5,
   },
   selectedRadio: {
-    backgroundColor: 'green',
+    backgroundColor: '#007BFF',
     color: 'white',
-  },
-  imageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 10,
-  },
-  coinImage: {
-    width: 100,
-    height: 100,
-    marginHorizontal: 5,
   },
 });
 
 export default AddImg;
-

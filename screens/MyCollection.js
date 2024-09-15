@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Search from '../component/Search';
 import AddImg from '../component/AddImg';
 import { ref, onValue, get } from 'firebase/database'; 
-import { db } from '../firebase'; 
+import { db, auth } from '../firebase'; // Import the auth module
 
 const Stack = createNativeStackNavigator();
 
@@ -16,30 +16,46 @@ const MyCollection = ({ navigation }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const coinsRef = ref(db, 'coins'); 
+    const fetchCoins = () => {
+      const userId = auth.currentUser?.uid; // Get the current user's ID
+      if (!userId) {
+        console.error('User not authenticated');
+        return;
+      }
 
-    const unsubscribe = onValue(coinsRef, (snapshot) => {
-      console.log('Data received from Realtime Database');
-      const coinsData = [];
-      snapshot.forEach((childSnapshot) => {
-        const coin = {
-          uid: childSnapshot.key,
-          ...childSnapshot.val(),
-        };
-        coinsData.push(coin);
-        console.log('Coin data:', coin); // Log each coin's data
+      const coinsRef = ref(db, `users/${userId}/coins`); // Access the coins under the user's node
+
+      const unsubscribe = onValue(coinsRef, (snapshot) => {
+        console.log('Data received from Realtime Database');
+        const coinsData = [];
+        snapshot.forEach((childSnapshot) => {
+          const coin = {
+            uid: childSnapshot.key,
+            ...childSnapshot.val(),
+          };
+          coinsData.push(coin);
+          console.log('Coin data:', coin); // Log each coin's data
+        });
+        setCoins(coinsData);
+        setFilteredCoins(coinsData); // Initialize filteredCoins with all coins
       });
-      setCoins(coinsData);
-      setFilteredCoins(coinsData); // Initialize filteredCoins with all coins
-    });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    };
+
+    fetchCoins();
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      const snapshot = await get(ref(db, 'coins'));
+      const userId = auth.currentUser?.uid; // Get the current user's ID
+      if (!userId) {
+        console.error('User not authenticated');
+        return;
+      }
+
+      const snapshot = await get(ref(db, `users/${userId}/coins`));
       const coinsData = [];
       snapshot.forEach((childSnapshot) => {
         coinsData.push({
@@ -92,23 +108,17 @@ const MyCollection = ({ navigation }) => {
                 <Text style={styles.noDataText}>No coins found</Text>
               ) : (
                 filteredCoins.map((coin) => (
-                  <View style={styles.container}>
-      {coins.map((coin) => (
-        <View key={coin.uid} style={styles.coinContainer}>
-          {/* Conditionally render only the front image */}
-          {coin.imageFront && (
-            <Image source={{ uri: coin.imageFront}} style={styles.coinImage} />
-          )}
-          <View style={styles.textContainer}>
-            <Text style={styles.coinName}>{coin.name}</Text>
-            <Text style={styles.coinCountry}>{coin.country}</Text>
-            <Text style={styles.coinYear}>{coin.year}</Text>
-            <Text style={styles.coinType}>{coin.coinType}</Text>
-          </View>
-        </View>
-      ))}
-    </View>
-
+                  <View key={coin.uid} style={styles.coinContainer}>
+                    {coin.imageFront && (
+                      <Image source={{ uri: coin.imageFront}} style={styles.coinImage} />
+                    )}
+                    <View style={styles.textContainer}>
+                      <Text style={styles.coinName}>{coin.name}</Text>
+                      <Text style={styles.coinCountry}>{coin.country}</Text>
+                      <Text style={styles.coinYear}>{coin.year}</Text>
+                      <Text style={styles.coinType}>{coin.coinType}</Text>
+                    </View>
+                  </View>
                 ))
               )}
             </ScrollView>
@@ -122,23 +132,16 @@ const MyCollection = ({ navigation }) => {
     </GestureHandlerRootView>
   );
 };
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 10,
-  },
   coinContainer: {
     padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#ccc',
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
     marginBottom: 20,
     borderRadius: 10,
-    overflow: 'hidden',
-    borderColor: '#ddd',
-    borderWidth: 1,
     backgroundColor: '#fff',
   },
   coinImage: {
@@ -149,11 +152,9 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     flexDirection: 'column',
-    position: 'relative',
   },
   coinName: {
     fontSize: 20,
-    paddingBottom:5,
     fontWeight: 'bold',
   },
   coinCountry: {
@@ -162,18 +163,12 @@ const styles = StyleSheet.create({
   },
   coinYear: {
     fontSize: 14,
-    position: 'absolute',
-    bottom: 0,
-    right: -200,
-    color: 'black',
+    color: '#000',
   },
   coinType: {
     fontSize: 14,
-    position: 'absolute',
-    top: 0,
-    right: -200,
     fontWeight: 'bold',
-    color: 'black',
+    color: '#000',
   },
   noDataText: {
     fontSize: 18,
@@ -192,6 +187,5 @@ const styles = StyleSheet.create({
   },
 });
 
-
-
 export default MyCollection;
+
